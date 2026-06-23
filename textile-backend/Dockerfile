@@ -1,4 +1,4 @@
-FROM php:8.2-cli
+FROM php:8.3-cli
 
 # Base build tools + libraries needed by pdo_mysql, zip, and the SQL Server driver
 RUN apt-get update && apt-get install -y \
