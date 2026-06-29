@@ -1,0 +1,30 @@
+RewriteEngine On
+RewriteRule ^test-rewrite$ /Premier_crm/public/index.html [L]
+<IfModule mod_rewrite.c>
+    <IfModule mod_negotiation.c>
+        Options -MultiViews -Indexes
+    </IfModule>
+
+    RewriteEngine On
+
+    # Handle Authorization Header
+    RewriteCond %{HTTP:Authorization} .
+    RewriteRule .* - [E=HTTP_AUTHORIZATION:%{HTTP:Authorization}]
+
+    # Handle X-XSRF-Token Header
+    RewriteCond %{HTTP:x-xsrf-token} .
+    RewriteRule .* - [E=HTTP_X_XSRF_TOKEN:%{HTTP:X-XSRF-Token}]
+
+    # 1) If the request is for a real file or folder that exists
+    #    (assets, favicon, images, etc.) - serve it as-is.
+    RewriteCond %{REQUEST_FILENAME} -f [OR]
+    RewriteCond %{REQUEST_FILENAME} -d
+    RewriteRule ^ - [L]
+
+    # 2) Anything under /api -> send to Laravel's front controller.
+    RewriteRule ^api index.php [L]
+
+    # 3) Everything else (React routes like /dashboard, /master/orders, etc.)
+    #    -> serve the React app's index.html so React Router can handle it.
+    RewriteRule ^ index.html [L]
+</IfModule>

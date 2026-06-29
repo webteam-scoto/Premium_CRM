@@ -1,0 +1,48 @@
+<?php
+
+namespace App\Models;
+
+use Illuminate\Database\Eloquent\Model;
+
+class Customer extends Model
+{
+    protected $table = 'Customers';
+    protected $primaryKey = 'Id';
+
+    const CREATED_AT = 'CreatedAt';
+    const UPDATED_AT = 'UpdatedAt';
+
+    protected $fillable = [
+        'Code', 'Name', 'Phone', 'Email', 'Type', 'District', 'Taluk',
+        'Address', 'CreditLimit', 'Outstanding', 'Status', 'Notes',
+        'CreatedBy', 'ApprovedBy',
+    ];
+
+    protected $casts = [
+        'CreditLimit' => 'decimal:2',
+        'Outstanding' => 'decimal:2',
+    ];
+
+    protected static function booted(): void
+    {
+        static::creating(function (Customer $customer) {
+            $customer->Lcode = $customer->Lcode ?? 'PRE-1';
+            $customer->Ccode = $customer->Ccode ?? 'PRE';
+        });
+    }
+
+    public function creator()
+    {
+        return $this->belongsTo(User::class, 'CreatedBy');
+    }
+
+    public function approver()
+    {
+        return $this->belongsTo(User::class, 'ApprovedBy');
+    }
+
+    public function orders()
+    {
+        return $this->hasMany(Order::class, 'CustomerId');
+    }
+}

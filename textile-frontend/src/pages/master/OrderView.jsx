@@ -1,0 +1,301 @@
+import { useTheme } from "../../ThemeContext";
+import { useState, useEffect } from "react";
+import { useNavigate, useParams, useSearchParams } from "react-router-dom";
+import Layout from "../../components/Layout";
+import { getG, statusColor, G } from "../../theme";
+import API from "../../services/api";
+
+const getThemeColors = () => getG(localStorage.getItem("premier_theme") === "dark");
+
+let tG = getThemeColors();
+
+const Field = ({ label, children }) => (
+  <div style={{ marginBottom: 18 }}>
+    <label style={{ display: "block", fontSize: 12, fontWeight: 600, color: tG.textLabel, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 6 }}>
+      {label}
+    </label>
+    {children}
+  </div>
+);
+
+const Input = (props) => (
+  <input {...props} style={{ width: "100%", padding: "9px 13px", borderRadius: 9, border: `1px solid ${"rgba(27,77,46,0.18)"}`, fontSize: 14, fontFamily: "inherit", color: tG.textMain, background: tG.card, outline: "none", boxSizing: "border-box" }} />
+);
+
+const Select = ({ children, ...props }) => (
+  <select {...props} style={{ width: "100%", padding: "9px 13px", borderRadius: 9, border: `1px solid ${"rgba(27,77,46,0.18)"}`, fontSize: 14, fontFamily: "inherit", color: tG.textMain, background: tG.card, outline: "none", boxSizing: "border-box" }}>
+    {children}
+  </select>
+);
+
+const ReadRow = ({ label, value }) => (
+  <div style={{ display: "flex", justifyContent: "space-between", padding: "10px 0", borderBottom: "1px solid rgba(106,163,38,0.08)" }}>
+    <span style={{ fontSize: 13, color: tG.textSub }}>{label}</span>
+    <span style={{ fontSize: 13, fontWeight: 600, color: tG.textMain }}>{value ?? "—"}</span>
+  </div>
+);
+
+const paymentColor = (p) => {
+  const tG = getThemeColors();
+  const map = {
+    paid:    { bg: "rgba(124,179,66,0.12)", color: "#2d6a4f", border: "rgba(124,179,66,0.30)" },
+    unpaid:  { bg: "rgba(200,60,50,0.10)",  color: "#a03025", border: "rgba(200,60,50,0.26)" },
+    partial: { bg: "rgba(200,160,40,0.12)", color: "#8a6510", border: "rgba(200,160,40,0.30)" },
+    refund:  { bg: "rgba(130,80,200,0.10)", color: "#6a30c0", border: "rgba(130,80,200,0.26)" },
+  };
+  return map[p] || map.unpaid;
+};
+
+const Badge = ({ text, colorFn }) => {
+  const tG = getThemeColors();
+  const s = colorFn(text);
+  return (
+    <span style={{ ...s, padding: "3px 11px", borderRadius: 20, fontSize: 12, fontWeight: 600, border: `1px solid ${s.border}` }}>
+      {text.charAt(0).toUpperCase() + text.slice(1)}
+    </span>
+  );
+};
+
+export default function OrderView() {
+  const { isDark } = useTheme();
+  const themeG = getG(isDark);
+  const navigate = useNavigate();
+
+  const card = { background: themeG.card, border: `1px solid ${themeG.border}`, borderRadius: 14, padding: 24, boxShadow: "0 4px 16px rgba(106,163,38,0.05)" };
+  const cardTitle = { fontFamily: "'Inter', 'Segoe UI', Roboto, Helvetica, Arial, sans-serif", fontSize: 16, fontWeight: 600, margin: "0 0 20px", color: themeG.textMain };
+
+  const { id } = useParams();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const editMode = searchParams.get("edit") === "1";
+
+  const [order, setOrder] = useState(null);
+  const [form, setForm] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    (async () => {
+      try {
+        const res = await API.get(`/orders/${id}`);
+        setOrder(res.data);
+        setForm({
+          qty: res.data.Quantity,
+          pricePerUnit: res.data.PricePerUnit,
+          discount: res.data.DiscountPct || 0,
+          status: res.data.Status,
+          paymentStatus: res.data.PaymentStatus,
+          deliveryDate: res.data.DeliveryDate ? res.data.DeliveryDate.substring(0, 10) : "",
+          notes: res.data.Notes || "",
+        });
+      } catch (err) {
+        setError("Failed to load order.");
+      } finally {
+        setLoading(false);
+      }
+    })();
+  }, [id]);
+
+  const set = (k, v) => setForm((f) => ({ ...f, [k]: v }));
+
+  const total = form
+    ? (parseFloat(form.qty || 0) * parseFloat(form.pricePerUnit || 0) * (1 - (parseFloat(form.discount) || 0) / 100)).toFixed(2)
+    : "—";
+
+  const enterEdit = () => setSearchParams({ edit: "1" });
+  const cancelEdit = () => setSearchParams({});
+
+  const handleSave = async () => {
+    setError("");
+    setSaving(true);
+    try {
+      const res = await API.put(`/orders/${id}`, form);
+      setOrder(res.data);
+      setSearchParams({});
+    } catch (err) {
+      setError(err.response?.data?.message || "Failed to update order.");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleDelete = async () => {
+    if (!window.confirm(`Delete order ${order.Code}? This cannot be undone.`)) return;
+    try {
+      await API.delete(`/orders/${id}`);
+      navigate("/master/orders");
+    } catch (err) {
+      setError(err.response?.data?.message || "Failed to delete order.");
+    }
+  };
+
+  if (loading) {
+    return (
+      <Layout pageTitle="Order">
+        <p style={{ color: themeG.textSub }}>Loading order…</p>
+      </Layout>
+    );
+  }
+
+  if (!order) {
+    return (
+      <Layout pageTitle="Order">
+        <p style={{ color: "#a23528" }}>{error || "Order not found."}</p>
+        <button onClick={() => navigate("/master/orders")} style={{ marginTop: 12, padding: "9px 20px", borderRadius: 9, border: `1px solid ${themeG.border}`, background: themeG.card, cursor: "pointer", fontFamily: "inherit" }}>
+          Back to Orders
+        </button>
+      </Layout>
+    );
+  }
+
+  return (
+    <Layout pageTitle={`${editMode ? "Edit Order" : "Order Details"} · ${order.customer?.Name ?? ""}`}>
+
+      {error && (
+        <div style={{ marginBottom: 16, background: "rgba(192,57,43,0.08)", border: "1px solid rgba(192,57,43,0.25)", borderRadius: 10, padding: "10px 14px", fontSize: 13, color: "#a23528" }}>
+          {error}
+        </div>
+      )}
+
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 24 }}>
+
+        <div style={card}>
+          <h3 style={cardTitle}>Order Details</h3>
+
+          <ReadRow label="Order Code" value={order.Code} />
+          <ReadRow label="Customer" value={order.customer ? `${order.customer.Name} (${order.customer.Code})` : "—"} />
+          <ReadRow label="Product" value={order.product ? `${order.product.Name} (${order.product.Code})` : "—"} />
+          <ReadRow label="Category" value={order.Category === "cloth" ? "👘 Cloth" : "🧵 Yarn"} />
+          <ReadRow label="Sub-type" value={order.SubType} />
+
+          {editMode ? (
+            <>
+              <Field label="Quantity">
+                <Input type="number" value={form.qty} onChange={(e) => set("qty", e.target.value)} />
+              </Field>
+              <Field label="Price per Unit (₹)">
+                <Input type="number" value={form.pricePerUnit} onChange={(e) => set("pricePerUnit", e.target.value)} />
+              </Field>
+              <Field label="Discount (%)">
+                <Input type="number" min={0} max={100} value={form.discount} onChange={(e) => set("discount", e.target.value)} />
+              </Field>
+            </>
+          ) : (
+            <>
+              <ReadRow label="Quantity" value={order.Quantity} />
+              <ReadRow label="Price per Unit" value={`₹${parseFloat(order.PricePerUnit).toLocaleString()}`} />
+              <ReadRow label="Discount" value={`${order.DiscountPct || 0}%`} />
+              <ReadRow label="Total Amount" value={`₹${parseFloat(order.TotalAmount).toLocaleString()}`} />
+            </>
+          )}
+        </div>
+
+        <div style={card}>
+          <h3 style={cardTitle}>Status & Delivery</h3>
+
+          {editMode ? (
+            <>
+              <Field label="Order Status">
+                <Select value={form.status} onChange={(e) => set("status", e.target.value)}>
+                  <option value="pending">Pending</option>
+                  <option value="approved">Approved</option>
+                  <option value="processing">Processing</option>
+                  <option value="delivered">Delivered</option>
+                  <option value="declined">Declined</option>
+                </Select>
+              </Field>
+              <Field label="Payment Status">
+                <Select value={form.paymentStatus} onChange={(e) => set("paymentStatus", e.target.value)}>
+                  <option value="unpaid">Unpaid</option>
+                  <option value="paid">Paid</option>
+                  <option value="partial">Partial</option>
+                  <option value="refund">Refund</option>
+                </Select>
+              </Field>
+              <Field label="Expected Delivery Date">
+                <Input type="date" value={form.deliveryDate} onChange={(e) => set("deliveryDate", e.target.value)} />
+              </Field>
+              <Field label="Notes">
+                <textarea value={form.notes} onChange={(e) => set("notes", e.target.value)} rows={4}
+                  style={{ width: "100%", padding: "9px 13px", borderRadius: 9, border: `1px solid ${"rgba(27,77,46,0.18)"}`, fontSize: 14, fontFamily: "inherit", color: "#1a3d2b", background: "#ffffff", outline: "none", resize: "vertical", boxSizing: "border-box" }} />
+              </Field>
+
+              <div style={{ marginTop: 12, padding: "16px 18px", borderRadius: 12, border: `2px solid rgba(124,179,66,0.25)`, background: "rgba(124,179,66,0.05)" }}>
+                <div style={{ display: "flex", justifyContent: "space-between" }}>
+                  <span style={{ fontSize: 13, color: "#4a7a5a" }}>New Total</span>
+                  <span style={{ fontSize: 14, fontWeight: 700, color: "#2d6a4f" }}>₹{parseFloat(total).toLocaleString()}</span>
+                </div>
+              </div>
+            </>
+          ) : (
+            <>
+              <div style={{ display: "flex", justifyContent: "space-between", padding: "10px 0" }}>
+                <span style={{ fontSize: 13, color: "#4a7a5a" }}>Status</span>
+                <Badge text={order.Status} colorFn={statusColor} />
+              </div>
+              <div style={{ display: "flex", justifyContent: "space-between", padding: "10px 0" }}>
+                <span style={{ fontSize: 13, color: "#4a7a5a" }}>Payment</span>
+                <Badge text={order.PaymentStatus} colorFn={paymentColor} />
+              </div>
+              <ReadRow label="Delivery Date" value={order.DeliveryDate ? order.DeliveryDate.substring(0, 10) : "—"} />
+              <ReadRow label="Created" value={order.CreatedAt?.substring(0, 10)} />
+              <div style={{ marginTop: 10 }}>
+                <p style={{ fontSize: 12, color: "#3d6b50", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 6 }}>Notes</p>
+                <p style={{ fontSize: 13, color: "#1a3d2b", margin: 0 }}>{order.Notes || "—"}</p>
+              </div>
+            </>
+          )}
+        </div>
+      </div>
+
+      {order.OrderDetails && Object.keys(order.OrderDetails).length > 0 && (
+        <div style={{ ...card, marginTop: 24 }}>
+          <h3 style={cardTitle}>
+            {order.SubType === "dhoti"   && "Dhoti Details"}
+            {order.SubType === "blouse"  && "Blouse Fabric Details"}
+            {order.SubType === "uniform" && "Uniform Details"}
+            {order.SubType === "others"  && "Product Details"}
+            {!["dhoti","blouse","uniform","others"].includes(order.SubType) && "Order Details"}
+          </h3>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0 40px" }}>
+            {Object.entries(order.OrderDetails)
+              .filter(([, v]) => v !== "" && v !== null && v !== undefined)
+              .map(([key, value]) => (
+                <ReadRow
+                  key={key}
+                  label={key.replace(/([A-Z])/g, " $1").replace(/^./, s => s.toUpperCase())}
+                  value={String(value)}
+                />
+              ))}
+          </div>
+        </div>
+      )}
+
+      <div style={{ display: "flex", gap: 12, marginTop: 28, justifyContent: "flex-end" }}>
+        <button onClick={() => navigate("/master/orders")} style={{ padding: "10px 24px", borderRadius: 9, border: `1px solid ${"rgba(27,77,46,0.18)"}`, background: "#ffffff", color: "#4a7a5a", cursor: "pointer", fontFamily: "inherit", fontSize: 14, fontWeight: 500 }}>
+          Back
+        </button>
+
+        {editMode ? (
+          <>
+            <button onClick={cancelEdit} style={{ padding: "10px 24px", borderRadius: 9, border: `1px solid ${"rgba(27,77,46,0.18)"}`, background: "#ffffff", color: "#4a7a5a", cursor: "pointer", fontFamily: "inherit", fontSize: 14, fontWeight: 500 }}>
+              Cancel
+            </button>
+            <button onClick={handleSave} disabled={saving} style={{ padding: "10px 28px", borderRadius: 9, border: "none", background: "#2d6a4f", color: "#ffffff", cursor: saving ? "not-allowed" : "pointer", fontFamily: "inherit", fontSize: 14, fontWeight: 700, boxShadow: "0 2px 10px rgba(124,179,66,0.32)", opacity: saving ? 0.6 : 1 }}>
+              {saving ? "Saving…" : "Save Changes"}
+            </button>
+          </>
+        ) : (
+          <>
+            <button onClick={handleDelete} style={{ padding: "10px 24px", borderRadius: 9, border: "1px solid rgba(192,57,43,0.30)", background: "rgba(192,57,43,0.06)", color: "#a23528", cursor: "pointer", fontFamily: "inherit", fontSize: 14, fontWeight: 600 }}>
+              Delete
+            </button>
+            <button onClick={enterEdit} style={{ padding: "10px 28px", borderRadius: 9, border: "none", background: "#2d6a4f", color: "#ffffff", cursor: "pointer", fontFamily: "inherit", fontSize: 14, fontWeight: 700, boxShadow: "0 2px 10px rgba(124,179,66,0.32)" }}>
+              Edit Order
+            </button>
+          </>
+        )}
+      </div>
+    </Layout>
+  );
+}
