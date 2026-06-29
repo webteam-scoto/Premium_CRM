@@ -1,5 +1,6 @@
 import { useTheme } from "../../ThemeContext";
 import { useState, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
 import Layout from "../../components/Layout";
 import { getG, statusColor } from "../../theme";
 import API from "../../services/api";
@@ -58,8 +59,11 @@ function LineChart({ points, color }) {
 export default function ReportsOrders() {
   const { isDark } = useTheme();
   const themeG = getG(isDark);
+  const navigate = useNavigate();
 
-  const [orders, setOrders] = useState([]);
+  const tab = localStorage.getItem("premier_category") || "cloth";
+
+  const [allOrders, setAllOrders] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
@@ -71,7 +75,7 @@ export default function ReportsOrders() {
     (async () => {
       try {
         const res = await API.get("/orders");
-        setOrders(res.data);
+        setAllOrders(res.data);
       } catch (err) {
         setError("Failed to load order report data.");
       } finally {
@@ -79,6 +83,8 @@ export default function ReportsOrders() {
       }
     })();
   }, []);
+
+  const orders = allOrders.filter((o) => o.Category === tab);
 
   if (loading) {
     return (
@@ -90,9 +96,10 @@ export default function ReportsOrders() {
 
   const statusCounts  = groupBy(orders, (o) => o.Status);
   const paymentCounts = groupBy(orders, (o) => o.PaymentStatus);
-  const categoryCounts = groupBy(orders, (o) => o.Category);
+  const subTypeCounts = groupBy(orders, (o) => o.SubType || "—");
   const maxStatus  = Math.max(...Object.values(statusCounts),  1);
   const maxPayment = Math.max(...Object.values(paymentCounts), 1);
+  const maxSubType = Math.max(...Object.values(subTypeCounts), 1);
 
   const totalRevenue  = orders.reduce((s, o) => s + (parseFloat(o.TotalAmount) || 0), 0);
   const avgOrderValue = orders.length ? totalRevenue / orders.length : 0;
@@ -109,6 +116,18 @@ export default function ReportsOrders() {
 
   return (
     <Layout pageTitle="Order Reports">
+
+      {/* ── Category badge ── */}
+      <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 20 }}>
+        <div style={{ display: "inline-flex", alignItems: "center", gap: 8, padding: "8px 18px", borderRadius: 10, background: themeG.card, border: `1px solid ${themeG.border}`, boxShadow: "0 2px 8px rgba(106,163,38,0.06)" }}>
+          <span style={{ fontSize: 18 }}>{tab === "cloth" ? "👘" : "🧵"}</span>
+          <span style={{ fontFamily: FONT, fontSize: 14, fontWeight: 700, color: themeG.textMain }}>{tab === "cloth" ? "Cloth" : "Yarn"} Reports</span>
+        </div>
+        <span style={{ fontSize: 12, color: themeG.textSub, fontFamily: FONT }}>
+          <span style={{ color: themeG.accent, cursor: "pointer", textDecoration: "underline" }}
+            onClick={() => navigate("/select-category")}>Switch category</span>
+        </span>
+      </div>
 
       {error && (
         <div style={{ marginBottom: 16, background: "rgba(192,57,43,0.08)", border: "1px solid rgba(192,57,43,0.25)", borderRadius: 10, padding: "10px 14px", fontSize: 13, color: "#a23528", fontFamily: FONT }}>
@@ -140,12 +159,16 @@ export default function ReportsOrders() {
           )}
         </div>
         <div style={card}>
-          <h3 style={cardTitle}>By Category</h3>
-          {Object.entries(categoryCounts).map(([cat, count]) => (
-            <BarRow key={cat} label={cat === "cloth" ? "👘 Cloth" : "🧵 Yarn"} count={count}
-              max={Math.max(...Object.values(categoryCounts), 1)}
-              color={cat === "yarn" ? "#d4a017" : "#3a9bd5"} themeG={themeG} />
-          ))}
+          <h3 style={cardTitle}>By Sub-type</h3>
+          {Object.keys(subTypeCounts).length === 0 ? (
+            <p style={{ color: themeG.textSub, fontSize: 13, fontFamily: FONT }}>No orders yet.</p>
+          ) : (
+            Object.entries(subTypeCounts).map(([st, count]) => (
+              <BarRow key={st} label={st} count={count}
+                max={maxSubType}
+                color={tab === "yarn" ? "#d4a017" : "#3a9bd5"} themeG={themeG} />
+            ))
+          )}
         </div>
       </div>
 

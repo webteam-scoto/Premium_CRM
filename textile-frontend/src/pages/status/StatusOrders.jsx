@@ -24,8 +24,9 @@ export default function StatusOrders() {
   const themeG = getG(isDark);
 
   const navigate = useNavigate();
+  const tab = localStorage.getItem("premier_category") || "cloth";
   const [filter, setFilter] = useState("pending");
-  const [orders, setOrders] = useState([]);
+  const [allOrders, setAllOrders] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [actingId, setActingId] = useState(null);
@@ -35,7 +36,7 @@ export default function StatusOrders() {
     setLoading(true);
     try {
       const res = await API.get("/orders", { params: filter !== "all" ? { status: filter } : {} });
-      setOrders(res.data);
+      setAllOrders(res.data);
     } catch (err) {
       setError("Failed to load orders.");
     } finally {
@@ -44,6 +45,8 @@ export default function StatusOrders() {
   };
 
   useEffect(() => { load(); /* eslint-disable-next-line */ }, [filter]);
+
+  const orders = allOrders.filter((o) => o.Category === tab);
 
 const th = { textAlign: "left", fontSize: 11, color: themeG.textLabel, padding: "12px 16px", borderBottom: "1px solid rgba(106,163,38,0.13)", textTransform: "uppercase", letterSpacing: "0.07em", fontWeight: 600, background: "rgba(124,179,66,0.04)" }
 const td = { padding: "13px 16px", fontSize: 13.5, color: themeG.textMain }
@@ -66,6 +69,18 @@ const td = { padding: "13px 16px", fontSize: 13.5, color: themeG.textMain }
 
   return (
     <Layout pageTitle="Order Approvals">
+
+      {/* ── Category badge ── */}
+      <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 20 }}>
+        <div style={{ display: "inline-flex", alignItems: "center", gap: 8, padding: "8px 18px", borderRadius: 10, background: themeG.card, border: `1px solid ${themeG.border}`, boxShadow: "0 2px 8px rgba(106,163,38,0.06)" }}>
+          <span style={{ fontSize: 18 }}>{tab === "cloth" ? "👘" : "🧵"}</span>
+          <span style={{ fontFamily: "inherit", fontSize: 14, fontWeight: 700, color: themeG.textMain }}>{tab === "cloth" ? "Cloth" : "Yarn"} Orders</span>
+        </div>
+        <span style={{ fontSize: 12, color: themeG.textSub }}>
+          <span style={{ color: themeG.accent, cursor: "pointer", textDecoration: "underline" }}
+            onClick={() => navigate("/select-category")}>Switch category</span>
+        </span>
+      </div>
 
       <div style={{ display: "flex", gap: 8, marginBottom: 24, flexWrap: "wrap" }}>
         {["pending", "approved", "processing", "delivered", "declined", "all"].map((f) => (
@@ -129,7 +144,7 @@ const td = { padding: "13px 16px", fontSize: 13.5, color: themeG.textMain }
       </div>
 
       <p style={{ marginTop: 14, fontSize: 13, color: themeG.textSub }}>
-        Showing {orders.length} order{orders.length !== 1 ? "s" : ""} ({filter})
+        Showing {orders.length} {tab} order{orders.length !== 1 ? "s" : ""} ({filter})
       </p>
     </Layout>
   );

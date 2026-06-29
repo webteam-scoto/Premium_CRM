@@ -240,6 +240,25 @@ const YARN_SUBTYPES = {
   },
 };
 
+// ─── Custom sub-types (user-created, persisted per category) ─────────
+const CUSTOM_SUBTYPES_KEY = "premier_custom_subtypes";
+
+function loadCustomSubtypes() {
+  try {
+    const raw = localStorage.getItem(CUSTOM_SUBTYPES_KEY);
+    return raw ? JSON.parse(raw) : { cloth: {}, yarn: {} };
+  } catch {
+    return { cloth: {}, yarn: {} };
+  }
+}
+
+function saveCustomSubtype(category, key, config) {
+  const all = loadCustomSubtypes();
+  all[category] = { ...(all[category] || {}), [key]: config };
+  localStorage.setItem(CUSTOM_SUBTYPES_KEY, JSON.stringify(all));
+  return all;
+}
+
 // ─── Small components ───────────────────────────────────────────────
 const Field = ({ label, children }) => (
   <div style={{ marginBottom: 18 }}>
@@ -324,9 +343,11 @@ export default function AddProduct() {
   const cardTitle = { fontFamily: FONT, fontSize: 16, fontWeight: 600, margin: "0 0 20px", color: themeG.textMain };
 
   const [tab, setTab]         = useState(savedCat);
-  const subtypeMap            = tab === "yarn" ? YARN_SUBTYPES : CLOTH_SUBTYPES;
+  const [customSubtypes, setCustomSubtypes] = useState(loadCustomSubtypes());
+  const subtypeMap            = { ...(tab === "yarn" ? YARN_SUBTYPES : CLOTH_SUBTYPES), ...(customSubtypes[tab] || {}) };
   const defaultSubtype        = tab === "yarn" ? "Bundle" : "Dhoti";
   const [subType, setSubType] = useState(defaultSubtype);
+  const [showNewSubtype, setShowNewSubtype] = useState(false);
 
   // subtype-specific field values: { fieldKey: value }
   const [specFields, setSpecFields] = useState({});
@@ -353,6 +374,14 @@ export default function AddProduct() {
 
   const handleSubTypeChange = (st) => {
     setSubType(st);
+    setSpecFields({});
+  };
+
+  const handleCreateSubtype = (newKey, newConfig) => {
+    const updatedAll = saveCustomSubtype(tab, newKey, newConfig);
+    setCustomSubtypes(updatedAll);
+    setShowNewSubtype(false);
+    setSubType(newKey);
     setSpecFields({});
   };
 
@@ -435,6 +464,11 @@ export default function AddProduct() {
                   {cfg.icon} {cfg.label}
                 </button>
               ))}
+              <button onClick={() => setShowNewSubtype(true)}
+                style={{ padding: "7px 16px", borderRadius: 20, border: "1.5px dashed", cursor: "pointer", fontFamily: FONT, fontSize: 13, fontWeight: 600, transition: "all 0.12s",
+                  background: "transparent", color: themeG.accent, borderColor: themeG.accent }}>
+                + New Sub-type
+              </button>
             </div>
           </Field>
 
@@ -544,6 +578,119 @@ export default function AddProduct() {
           {saving ? "Saving…" : "Save Product"}
         </button>
       </div>
+
+      {showNewSubtype && (
+        <NewSubtypeModal
+          existingKeys={Object.keys(subtypeMap)}
+          themeG={themeG}
+          onClose={() => setShowNewSubtype(false)}
+          onCreate={handleCreateSubtype}
+        />
+      )}
     </Layout>
+  );
+}
+
+// ─── New sub-type popup ───────────────────────────────────────────────
+function NewSubtypeModal({ existingKeys, themeG, onClose, onCreate }) {
+  const [name, setName]               = useState("");
+  const [icon, setIcon]               = useState("🧶");
+  const [description, setDescription] = useState("");
+  const [specName, setSpecName]       = useState("");
+  const [specOptions, setSpecOptions] = useState("");
+  const [error, setError]             = useState("");
+
+  const ICONS = ["🧶","👘","🥻","👗","👖","👔","🧣","🧵","📦","🪢","🔺","🧥","🧦","👚"];
+
+  const handleCreate = () => {
+    const trimmedName = name.trim();
+    if (!trimmedName) {
+      setError("Please enter a sub-type name.");
+      return;
+    }
+    const key = trimmedName.replace(/\s+/g, "_");
+    if (existingKeys.some((k) => k.toLowerCase() === key.toLowerCase())) {
+      setError("A sub-type with this name already exists.");
+      return;
+    }
+
+    const fields = [];
+    if (specName.trim()) {
+      const opts = specOptions.split(",").map((o) => o.trim()).filter(Boolean);
+      fields.push(
+        opts.length > 0
+          ? { key: "spec1", label: specName.trim(), type: "chips", options: [...opts, "Other"] }
+          : { key: "spec1", label: specName.trim(), type: "text", placeholder: `Enter ${specName.trim().toLowerCase()}…` }
+      );
+    }
+
+    onCreate(key, {
+      label: trimmedName,
+      icon,
+      description: description.trim() || `${trimmedName} products`,
+      fields,
+    });
+  };
+
+  return (
+    <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.45)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1000 }}
+      onClick={onClose}>
+      <div onClick={(e) => e.stopPropagation()}
+        style={{ background: themeG.card, borderRadius: 16, padding: 28, width: 440, maxWidth: "90vw", boxShadow: "0 12px 40px rgba(0,0,0,0.25)", fontFamily: FONT }}>
+
+        <h3 style={{ margin: "0 0 4px", fontSize: 18, fontWeight: 700, color: themeG.textMain, fontFamily: FONT }}>+ New Sub-type</h3>
+        <p style={{ margin: "0 0 20px", fontSize: 12.5, color: themeG.textSub, fontFamily: FONT }}>
+          Create a new product category pill (e.g. "Saree"). It'll appear alongside Dhoti, Blouse, etc.
+        </p>
+
+        {error && (
+          <div style={{ marginBottom: 14, background: "rgba(192,57,43,0.08)", border: "1px solid rgba(192,57,43,0.25)", borderRadius: 8, padding: "8px 12px", fontSize: 12.5, color: "#a23528", fontFamily: FONT }}>
+            {error}
+          </div>
+        )}
+
+        <Field label="Sub-type Name">
+          <Input placeholder="e.g. Saree, Towel, Lungi…" value={name} onChange={(e) => setName(e.target.value)} autoFocus />
+        </Field>
+
+        <Field label="Icon">
+          <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+            {ICONS.map((em) => (
+              <button key={em} type="button" onClick={() => setIcon(em)}
+                style={{ width: 36, height: 36, borderRadius: 9, border: "1.5px solid", cursor: "pointer", fontSize: 16,
+                  background: icon === em ? "rgba(45,106,79,0.13)" : themeG.card,
+                  borderColor: icon === em ? "#2d6a4f" : themeG.border }}>
+                {em}
+              </button>
+            ))}
+          </div>
+        </Field>
+
+        <Field label="Description (optional)">
+          <Input placeholder="Short description shown under the pill" value={description} onChange={(e) => setDescription(e.target.value)} />
+        </Field>
+
+        <Field label="Spec Field Name (optional)">
+          <Input placeholder="e.g. Length, Size, Fabric…" value={specName} onChange={(e) => setSpecName(e.target.value)} />
+        </Field>
+
+        {specName.trim() && (
+          <Field label="Spec Options (comma-separated, optional)">
+            <Input placeholder="e.g. 4 Meter, 6 Meter, 8 Meter" value={specOptions} onChange={(e) => setSpecOptions(e.target.value)} />
+          </Field>
+        )}
+
+        <div style={{ display: "flex", gap: 10, marginTop: 22, justifyContent: "flex-end" }}>
+          <button onClick={onClose}
+            style={{ padding: "9px 20px", borderRadius: 9, border: `1px solid ${themeG.border}`, background: themeG.card, color: themeG.textSub, cursor: "pointer", fontFamily: FONT, fontSize: 13.5, fontWeight: 500 }}>
+            Cancel
+          </button>
+          <button onClick={handleCreate}
+            style={{ padding: "9px 22px", borderRadius: 9, border: "none", background: themeG.accent, color: themeG.card, cursor: "pointer", fontFamily: FONT, fontSize: 13.5, fontWeight: 700, boxShadow: "0 2px 10px rgba(124,179,66,0.32)" }}>
+            Create Sub-type
+          </button>
+        </div>
+      </div>
+    </div>
   );
 }

@@ -1,9 +1,11 @@
 import { useTheme } from "../../ThemeContext";
 import { useState, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
 import Layout from "../../components/Layout";
 import { getG, G } from "../../theme";
 import API from "../../services/api";
 
+const FONT = "'Inter', 'Segoe UI', Roboto, Helvetica, Arial, sans-serif";
 const getThemeColors = () => getG(localStorage.getItem("premier_theme") === "dark");
 
 
@@ -28,8 +30,11 @@ const LOW_STOCK_THRESHOLD = 50;
 export default function ReportsProducts() {
   const { isDark } = useTheme();
   const themeG = getG(isDark);
+  const navigate = useNavigate();
 
-  const [products, setProducts] = useState([]);
+  const tab = localStorage.getItem("premier_category") || "cloth";
+
+  const [allProducts, setAllProducts] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
@@ -43,7 +48,7 @@ export default function ReportsProducts() {
     (async () => {
       try {
         const res = await API.get("/products");
-        setProducts(res.data);
+        setAllProducts(res.data);
       } catch (err) {
         setError("Failed to load product report data.");
       } finally {
@@ -51,6 +56,8 @@ export default function ReportsProducts() {
       }
     })();
   }, []);
+
+  const products = allProducts.filter((p) => p.Category === tab);
 
   if (loading) {
 
@@ -86,6 +93,18 @@ export default function ReportsProducts() {
 
   return (
     <Layout pageTitle="Product Reports">
+
+      {/* ── Category badge ── */}
+      <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 20 }}>
+        <div style={{ display: "inline-flex", alignItems: "center", gap: 8, padding: "8px 18px", borderRadius: 10, background: themeG.card, border: `1px solid ${themeG.border}`, boxShadow: "0 2px 8px rgba(106,163,38,0.06)" }}>
+          <span style={{ fontSize: 18 }}>{tab === "cloth" ? "👘" : "🧵"}</span>
+          <span style={{ fontFamily: FONT, fontSize: 14, fontWeight: 700, color: themeG.textMain }}>{tab === "cloth" ? "Cloth" : "Yarn"} Reports</span>
+        </div>
+        <span style={{ fontSize: 12, color: themeG.textSub, fontFamily: FONT }}>
+          <span style={{ color: themeG.accent, cursor: "pointer", textDecoration: "underline" }}
+            onClick={() => navigate("/select-category")}>Switch category</span>
+        </span>
+      </div>
 
       {error && (
         <div style={{ marginBottom: 16, background: "rgba(192,57,43,0.08)", border: "1px solid rgba(192,57,43,0.25)", borderRadius: 10, padding: "10px 14px", fontSize: 13, color: "#a23528" }}>
